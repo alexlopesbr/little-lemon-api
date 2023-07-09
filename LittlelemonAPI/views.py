@@ -1,7 +1,8 @@
 from decimal import Decimal
 
-from django.contrib.auth.models import Group, User
 from django.db import transaction
+from django.contrib.auth.models import Group, User
+from django.db.models import Q
 
 from rest_framework import generics, viewsets
 from rest_framework.decorators import api_view
@@ -28,7 +29,17 @@ class MenuItemView(generics.ListAPIView, generics.ListCreateAPIView):
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     ordering_fields = ['price']
-    search_fields = ['title']
+    search_fields = ['title', 'category__title']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search_query = self.request.query_params.get('search', None)
+
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | Q(category__title__icontains=search_query)
+            )
+        return queryset
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -57,12 +68,12 @@ class ManagerUsersView(generics.ListCreateAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        manager_group = Group.objects.get(name='manager')
+        manager_group = Group.objects.get(name='Manager')
         queryset = User.objects.filter(groups=manager_group)
         return queryset
 
     def perform_create(self, serializer):
-        manager_group = Group.objects.get(name='manager')
+        manager_group = Group.objects.get(name='Manager')
         user = serializer.save()
         user.groups.add(manager_group)
 
@@ -72,7 +83,7 @@ class ManagerSingleUserView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        manager_group = Group.objects.get(name='manager')
+        manager_group = Group.objects.get(name='Manager')
         queryset = User.objects.filter(groups=manager_group)
         return queryset
 
@@ -82,12 +93,12 @@ class DeliveryCrewManagement(generics.ListCreateAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        delivery_group = Group.objects.get(name='delivery crew')
+        delivery_group = Group.objects.get(name='Delivery Crew')
         queryset = User.objects.filter(groups=delivery_group)
         return queryset
 
     def perform_create(self, serializer):
-        delivery_group = Group.objects.get(name='delivery crew')
+        delivery_group = Group.objects.get(name='Delivery Crew')
         user = serializer.save()
         user.groups.add(delivery_group)
 
@@ -97,7 +108,7 @@ class DeliveryCrewManagementSingleView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        delivery_group = Group.objects.get(name='delivery crew')
+        delivery_group = Group.objects.get(name='Delivery Crew')
         queryset = User.objects.filter(groups=delivery_group)
         return queryset
 
@@ -152,7 +163,8 @@ class OrdersView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.groups.filter(name='manager').exists():
+
+        if user.groups.filter(name='Manager').exists():
             return Order.objects.all()
         return Order.objects.filter(user=user)
 
@@ -170,6 +182,6 @@ class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.groups.filter(name='manager').exists():
+        if user.groups.filter(name='Manager').exists():
             return Order.objects.all()
         return Order.objects.filter(user=user)
